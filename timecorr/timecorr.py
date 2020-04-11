@@ -1,11 +1,11 @@
 # coding: utf-8
 
 import numpy as np
-from .helpers import isfc, gaussian_weights, format_data, null_combine, reduce, smooth
+from .helpers import isfc, gaussian_weights, format_data, null_combine, mean_combine, reduce, smooth, eye_weights
 
 def timecorr(data, weights_function=gaussian_weights,
              weights_params=None, include_timepoints='all', exclude_timepoints=None,
-             combine=null_combine, cfun=isfc, rfun=None):
+             combine=null_combine, cfun=isfc, rfun=None, order=None):
     """
     Computes dynamics correlations in single-subject or multi-subject data.
 
@@ -115,45 +115,82 @@ def timecorr(data, weights_function=gaussian_weights,
         else:
             return filt
 
-    if type(data) == list:
-        T = data[0].shape[0]
-        return_list = True
-    else:
-        T = data.shape[0]
-        data = [data]
-        return_list = False
-
-    data = format_data(data)
-
-    weights = weights_function(T, weights_params)
-
-    include_timepoints = include_timepoints.lower()
-    if include_timepoints == 'all':
-        pass
-    elif include_timepoints == 'pre':
-        weights = np.tril(weights)
-    elif include_timepoints == 'post':
-        weights = np.triu(weights)
-    else:
-        raise Exception(f'Invalid option for include_timepoints: \'{include_timepoints}\'.  Must be one of: \'all\', \'pre\', or \'post\'.')
-
-    if not (exclude_timepoints is None):
-        weights = np.multiply(temporal_filter(T, exclude_timepoints), weights)
-
-    if cfun:
-        corrs = reduce(combine(cfun(data, weights)), rfun=rfun)
-
-        if not (cfun is None):
+    if order is None:
+        if type(data) == list:
+            T = data[0].shape[0]
+            return_list = True
+        else:
+            T = data.shape[0]
+            data = [data]
             return_list = False
 
-    else:
-        corrs = combine(smooth(data, kernel_fun=weights_function, kernel_params=weights_params)).tolist()
+        data = format_data(data)
+        weights = weights_function(T, weights_params)
 
-    if return_list and (not (type(corrs) == list)):
-        return [corrs]
-    elif (not return_list) and (type(corrs) == list) and (len(corrs) == 1):
-        return corrs[0]
-    else:
-        return corrs
+        include_timepoints = include_timepoints.lower()
+        if include_timepoints == 'all':
+            pass
+        elif include_timepoints == 'pre':
+            weights = np.tril(weights)
+        elif include_timepoints == 'post':
+            weights = np.triu(weights)
+        else:
+            raise Exception(f'Invalid option for include_timepoints: \'{include_timepoints}\'.  Must be one of: \'all\', \'pre\', or \'post\'.')
 
+        if not (exclude_timepoints is None):
+            weights = np.multiply(temporal_filter(T, exclude_timepoints), weights)
 
+        if cfun:
+            corrs = reduce(combine(cfun(data, weights)), rfun=rfun)
+            if not (cfun is None):
+                return_list = False
+        else:
+            corrs = combine(smooth(data, kernel_fun=weights_function, kernel_params=weights_params))
+
+        if return_list and (not (type(corrs) == list)):
+            return [corrs]
+        elif (not return_list) and (type(corrs) == list) and (len(corrs) == 1):
+            return corrs[0]
+        else:
+            return corrs
+
+    elif isinstance(order, int):
+        if order == 0:
+            return timecorr(data, weights_function=weights_function, weights_params=weights_params,
+                            include_timepoints=include_timepoints, exclude_timepoints=exclude_timepoints,
+                            combine=null_combine, cfun=isfc, rfun=None, order=None)
+        elif order < 0:
+            raise ValueError(f'Invalid option for order: \'{order}\'.  Must be a non-negative integer or a list of non-negative integers.')
+        else:
+            return timecorr(data, weights_function, weights_params, include_timepoints, exclude_timepoints,
+                            null_combine, isfc, rfun, [*range(order + 1)])
+
+    elif isinstance(order, list):
+        if not all(isinstance(o, int) and o >= 0 for o in order):
+            raise ValueError(f'Invalid option for order: \'{order}\'.  List must contain only non-negative integers.')
+        else:
+            idx = dict(); max_order = -1
+            for i, o in enumerate(order):
+                if o > max_order:
+                    max_order = o
+                idx.setdefault(o, []).append(i)
+
+            order_corrs = [None] * len(order)
+            for cord in range(max_order + 1):
+                if cord == 0:
+                    raw = data
+                    smoothed = timecorr(data, weights_function=weights_function, weights_params=weights_params,
+                                        include_timepoints=include_timepoints, exclude_timepoints=exclude_timepoints,
+                                        combine=combine, cfun=None, rfun=None, order=None)
+                else:
+                    raw = timecorr(raw, weights_function=eye_weights, weights_params={},
+                                   include_timepoints=include_timepoints, exclude_timepoints=exclude_timepoints,
+                                   combine=null_combine, cfun=cfun, rfun=rfun, order=None)
+                    smoothed = timecorr(raw, weights_function=weights_function, weights_params=weights_params,
+                                        include_timepoints=include_timepoints, exclude_timepoints=exclude_timepoints,
+                                        combine=combine, cfun=cfun, rfun=rfun, order=None)
+                if cord in idx:
+                    for i in idx[cord]:
+                        order_corrs[i] = smoothed
+
+        return order_corrs

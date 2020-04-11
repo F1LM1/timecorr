@@ -108,3 +108,4 @@ ENV/
 .idea/**/
 
 *Untitled*
+examples/plot_examples.py

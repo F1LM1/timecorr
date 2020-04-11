@@ -7,9 +7,15 @@ from scipy.spatial.distance import cdist
 
 
 def random_corrmat(K):
-    x = np.random.randn(K, K)
-    x = x * x.T
-    x /= np.max(np.abs(x))
+    while True:
+        x = np.random.randn(K, K)
+        x = x * x.T
+        max_val = np.max(np.abs(x))
+        max_locs = np.argwhere(abs(x) == max_val)
+        # Originally I had cool vectorized code here but it actually runs slower than this across the board
+        if all(idx[0] == idx[1] for idx in max_locs.tolist()):
+            break
+    x /= max_val
     np.fill_diagonal(x, 1.)
     return x
 

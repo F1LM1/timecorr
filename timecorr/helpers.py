@@ -581,7 +581,7 @@ def weighted_timepoint_decoder(data, nfolds=2, level=0, optimize_levels=None, cf
 
                     sub_in_smooth, sub_out_smooth, sub_in_raw, sub_out_raw = reduce_wrapper(folding_levels(sub_in_data, sub_out_data,
                                                                                             level=v, cfun=None, rfun=p_rfun,
-                                                                                            combine=combine,                                                                                           weights_fun=weights_fun,
+                                                                                            combine=combine, weights_fun=weights_fun,
                                                                                             weights_params=weights_params), level=v, rfun=rfun)
 
                 next_corrs = (1 - sd.cdist(in_raw, out_raw, 'correlation'))
@@ -741,7 +741,7 @@ def folding_levels(infold_data, outfold_data, level=0, cfun=None, weights_fun=No
     return in_fold_smooth, out_fold_smooth, in_fold_raw, out_fold_raw
 
 
-def reduce_wrapper(data, dims=10, level=0, rfun=None):
+def reduce_wrapper(data, level=0, rfun=None):
 
     if not level == 0:
 
